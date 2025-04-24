@@ -131,6 +131,7 @@ struct threadArgs {
   size_t recvInplaceOffset;
   ncclUniqueId ncclId;
   ncclComm_t* comms;
+  ncclComm_t* comms2;
   cudaStream_t* streams;
 
   void** expected;
