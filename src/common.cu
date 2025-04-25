@@ -4,6 +4,7 @@
  * See LICENSE.txt for license information
  ************************************************************************/
 
+#include "affinity.h"
 #include "common.h"
 #include <pthread.h>
 #include <cstdio>
@@ -613,10 +614,25 @@ testResult_t TimeTest(struct threadArgs* args, ncclDataType_t type, const char* 
   }
   TESTCHECK(completeColl(args));
 
+  int local_rank;
+  {
+    MPI_Comm node_comm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &node_comm);
+    MPI_Comm_rank(node_comm, &local_rank);
+    MPI_Comm_free(&node_comm);
+  }
+
   // Benchmark
   long repeat = run_cycles;
+  int my_repeat = 0;
   int which_comm = 0;
   do {
+    if (my_repeat >= 10 && my_repeat % 10 == 0) {
+        int core = my_repeat / 10;
+        core -= 1;
+        core = core % 72;
+        set_affinity(72 * local_rank + ((core + 1) % 72), 72 * local_rank + core);
+    }
     for (size_t size = args->minbytes; size<=args->maxbytes; size = ((args->stepfactor > 1) ? size*args->stepfactor : size+args->stepbytes)) {
       setupArgs(size, type, args);
       char rootName[100];
@@ -628,6 +644,7 @@ testResult_t TimeTest(struct threadArgs* args, ncclDataType_t type, const char* 
     }
     which_comm += 1;
     if (which_comm >= num_of_sizes) which_comm = 0;
+    my_repeat += 1;
   } while (--repeat);
 
   return testSuccess;
@@ -1107,7 +1124,8 @@ testResult_t run() {
        for (int i=0; i<num_of_sizes; i++) {
          CUDACHECK(cudaSetDevice(gpus[0]));
          // NCCLCHECK(ncclCommSplit(comms[0], ncclProc/(ncclProcs>>i), 0, comms2+i, nullptr));
-         NCCLCHECK(ncclCommSplit(comms[0], 0, 0, comms2+i, nullptr));
+         // NCCLCHECK(ncclCommSplit(comms[0], 0, 0, comms2+i, nullptr));
+         comms2[i] = comms[0];
        }
      }
 #if NCCL_VERSION_CODE >= NCCL_VERSION(2,19,0)
@@ -1201,9 +1219,9 @@ testResult_t run() {
 #endif
       NCCLCHECK(ncclCommDestroy(comms[i]));
     }
-    for (int i=0; i<num_of_sizes; i++) {
-      NCCLCHECK(ncclCommDestroy(comms2[i]));
-    }
+    // for (int i=0; i<num_of_sizes; i++) {
+    //   NCCLCHECK(ncclCommDestroy(comms2[i]));
+    // }
     free(comms);
     free(comms2);
   }
