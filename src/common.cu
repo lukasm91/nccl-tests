@@ -627,11 +627,13 @@ testResult_t TimeTest(struct threadArgs* args, ncclDataType_t type, const char* 
   int my_repeat = 0;
   int which_comm = 0;
   do {
-    if (my_repeat >= 10 && my_repeat % 10 == 0) {
-        int core = my_repeat / 10;
-        core -= 1;
-        core = core % 72;
-        set_affinity(72 * local_rank + ((core + 1) % 72), 72 * local_rank + core);
+    if (my_repeat >= 4 && my_repeat % 4 == 0) {
+        int proxy_core = my_repeat / 4;
+        proxy_core -= 1;
+        proxy_core = proxy_core % 72;
+        int main_core = 4;
+        if (main_core == proxy_core) main_core += 1;
+        set_affinity(72 * local_rank + main_core, 72 * local_rank + proxy_core);
     }
     for (size_t size = args->minbytes; size<=args->maxbytes; size = ((args->stepfactor > 1) ? size*args->stepfactor : size+args->stepbytes)) {
       setupArgs(size, type, args);
